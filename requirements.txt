@@ -1,0 +1,4 @@
+-e C:\Users\rahmh\Documents\AIAgentsPlatform\ai-agents
+python-telegram-bot==21.10
+python-dotenv==1.0.1
+apscheduler==3.10.4
