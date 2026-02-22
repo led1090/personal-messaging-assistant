@@ -8,3 +8,4 @@ venv/
 dist/
 build/
 .claude/
+bot_startup.log

@@ -1,6 +1,8 @@
 import base64
+import datetime
 import logging
 import time
+from zoneinfo import ZoneInfo
 
 from telegram import Update
 from telegram.ext import (
@@ -11,11 +13,11 @@ from telegram.ext import (
     filters,
 )
 
-from config import TELEGRAM_BOT_TOKEN
+from config import TELEGRAM_BOT_TOKEN, SUMMARY_HOUR, SUMMARY_MINUTE
 from ai_agents import swarm_client, chat_agent
 from context import build_context_variables
 from services.telegram import send_telegram_message, download_telegram_photo
-from services.scheduler import setup_scheduler
+from services.scheduler import daily_summary_job
 from database.models import init_db
 from database.repository import get_or_create_user, get_user_meals_today_summary
 
@@ -230,9 +232,16 @@ def main():
     )
     app.add_error_handler(error_handler)
 
-    # Set up scheduler for daily summaries
-    scheduler = setup_scheduler()
-    scheduler.start()
+    # Schedule daily summary at configured time (Asia/Riyadh timezone)
+    app.job_queue.run_daily(
+        daily_summary_job,
+        time=datetime.time(
+            hour=SUMMARY_HOUR,
+            minute=SUMMARY_MINUTE,
+            tzinfo=ZoneInfo("Asia/Riyadh"),
+        ),
+        name="daily_summary",
+    )
 
     logger.info("Personal Messaging Assistant bot started (polling)")
     app.run_polling(
