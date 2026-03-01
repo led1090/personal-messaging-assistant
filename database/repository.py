@@ -2,7 +2,13 @@ from datetime import date, datetime, timedelta
 from database.models import get_connection
 
 
-def get_or_create_user(phone_number: str) -> dict:
+def get_or_create_user(
+    phone_number: str,
+    first_name: str = None,
+    last_name: str = None,
+    username: str = None,
+    language_code: str = None,
+) -> dict:
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -11,12 +17,42 @@ def get_or_create_user(phone_number: str) -> dict:
 
     if row:
         user = dict(row)
+        # Sync Telegram identity fields if they've changed
+        updates = {}
+        if first_name is not None and user.get("first_name") != first_name:
+            updates["first_name"] = first_name
+        if last_name is not None and user.get("last_name") != last_name:
+            updates["last_name"] = last_name
+        if username is not None and user.get("username") != username:
+            updates["username"] = username
+        if language_code is not None and user.get("language_code") != language_code:
+            updates["language_code"] = language_code
+        if first_name is not None:
+            new_display = (first_name + " " + (last_name or "")).strip()
+            if user.get("display_name") != new_display:
+                updates["display_name"] = new_display
+        if updates:
+            set_clause = ", ".join(f"{k} = ?" for k in updates)
+            values = list(updates.values()) + [phone_number]
+            conn.execute(
+                f"UPDATE users SET {set_clause} WHERE phone_number = ?",
+                values,
+            )
+            conn.commit()
+            user.update(updates)
         conn.close()
         return user
 
+    display_name = None
+    if first_name:
+        display_name = (first_name + " " + (last_name or "")).strip()
+
     cursor.execute(
-        "INSERT INTO users (phone_number) VALUES (?)",
-        (phone_number,),
+        """INSERT INTO users (phone_number, first_name, last_name, username,
+           language_code, display_name)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (phone_number, first_name, last_name or "", username or "",
+         language_code or "en", display_name),
     )
     conn.commit()
     user_id = cursor.lastrowid
@@ -34,6 +70,34 @@ def update_user_goal(phone_number: str, calories: int):
     )
     conn.commit()
     conn.close()
+
+
+def update_user_profile(user_id: int, **fields) -> dict:
+    """Update any subset of user profile fields.
+
+    Supported fields: dietary_preferences, display_name, language_code, timezone.
+    Returns the updated user dict.
+    """
+    allowed = {"dietary_preferences", "display_name", "language_code", "timezone"}
+    to_update = {k: v for k, v in fields.items() if k in allowed and v is not None}
+    if not to_update:
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        user = dict(cursor.fetchone())
+        conn.close()
+        return user
+
+    conn = get_connection()
+    set_clause = ", ".join(f"{k} = ?" for k in to_update)
+    values = list(to_update.values()) + [user_id]
+    conn.execute(f"UPDATE users SET {set_clause} WHERE id = ?", values)
+    conn.commit()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    user = dict(cursor.fetchone())
+    conn.close()
+    return user
 
 
 def log_meal(

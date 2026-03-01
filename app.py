@@ -19,7 +19,7 @@ from context import build_context_variables
 from services.telegram import send_telegram_message, download_telegram_photo
 from services.scheduler import daily_summary_job
 from database.models import init_db
-from database.repository import get_or_create_user, get_user_meals_today_summary
+from database.repository import get_or_create_user, get_user_meals_today_summary, compute_daily_calorie_limit
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -28,9 +28,17 @@ logger = logging.getLogger(__name__)
 conversations = {}
 
 
-def _init_conversation(chat_id: int) -> dict:
+def _init_conversation(chat_id: int, tg_user=None) -> dict:
     """Create a new conversation, seeding context with today's meals if any."""
-    user = get_or_create_user(str(chat_id))
+    kwargs = {}
+    if tg_user:
+        kwargs = {
+            "first_name": tg_user.first_name,
+            "last_name": tg_user.last_name or "",
+            "username": tg_user.username or "",
+            "language_code": tg_user.language_code or "en",
+        }
+    user = get_or_create_user(str(chat_id), **kwargs)
     meal_summary = get_user_meals_today_summary(user["id"])
 
     messages = []
@@ -76,9 +84,17 @@ def run_swarm_with_retry(agent, messages, context_variables, max_retries=3):
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command -- greet the user."""
     chat_id = update.effective_chat.id
+    tg_user = update.effective_user
 
-    conv = _init_conversation(chat_id)
-    context_variables = build_context_variables(phone_number=str(chat_id))
+    conv = _init_conversation(chat_id, tg_user=tg_user)
+    user = get_or_create_user(
+        str(chat_id),
+        first_name=tg_user.first_name,
+        last_name=tg_user.last_name or "",
+        username=tg_user.username or "",
+        language_code=tg_user.language_code or "en",
+    )
+    context_variables = build_context_variables(phone_number=str(chat_id), user=user)
 
     user_message = {"role": "user", "content": "Hi! What can you do?"}
     conv["messages"].append(user_message)
@@ -101,13 +117,22 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle incoming text messages."""
     chat_id = update.effective_chat.id
+    tg_user = update.effective_user
     text = update.message.text
 
+    user = get_or_create_user(
+        str(chat_id),
+        first_name=tg_user.first_name,
+        last_name=tg_user.last_name or "",
+        username=tg_user.username or "",
+        language_code=tg_user.language_code or "en",
+    )
+
     if chat_id not in conversations:
-        _init_conversation(chat_id)
+        _init_conversation(chat_id, tg_user=tg_user)
 
     conv = conversations[chat_id]
-    context_variables = build_context_variables(phone_number=str(chat_id))
+    context_variables = build_context_variables(phone_number=str(chat_id), user=user)
 
     user_message = {"role": "user", "content": text}
     conv["messages"].append(user_message)
@@ -138,6 +163,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle incoming photo messages."""
     chat_id = update.effective_chat.id
+    tg_user = update.effective_user
     caption = update.message.caption or "Please analyze this food."
 
     # Telegram sends multiple photo sizes; take the largest (last in the list)
@@ -146,13 +172,22 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     image_bytes = await download_telegram_photo(photo_file)
     b64_image = base64.b64encode(image_bytes).decode("utf-8")
 
+    user = get_or_create_user(
+        str(chat_id),
+        first_name=tg_user.first_name,
+        last_name=tg_user.last_name or "",
+        username=tg_user.username or "",
+        language_code=tg_user.language_code or "en",
+    )
+
     if chat_id not in conversations:
-        _init_conversation(chat_id)
+        _init_conversation(chat_id, tg_user=tg_user)
 
     conv = conversations[chat_id]
     context_variables = build_context_variables(
         phone_number=str(chat_id),
         media_id=photo_file.file_id,
+        user=user,
     )
 
     user_message = {
@@ -193,6 +228,62 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
 
+async def profile_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /profile command -- show the user's full profile."""
+    chat_id = update.effective_chat.id
+    tg_user = update.effective_user
+
+    user = get_or_create_user(
+        str(chat_id),
+        first_name=tg_user.first_name,
+        last_name=tg_user.last_name or "",
+        username=tg_user.username or "",
+        language_code=tg_user.language_code or "en",
+    )
+
+    limit_data = compute_daily_calorie_limit(user["id"])
+
+    name = user.get("display_name") or user.get("first_name") or "Not set"
+    username_str = f"@{user['username']}" if user.get("username") else "Not set"
+    daily_goal = limit_data["daily_limit"]
+    current_weight = user.get("current_weight") or "Not set"
+    target_weight = user.get("target_weight") or "Not set"
+    dietary = user.get("dietary_preferences") or "None set"
+    language = user.get("language_code") or "en"
+    timezone = user.get("timezone") or "Asia/Riyadh"
+
+    weight_goal_section = ""
+    if limit_data["has_weight_goal"]:
+        weight_goal_section = (
+            f"\n*Weight Goal:*\n"
+            f"  Current: {current_weight} kg\n"
+            f"  Target: {target_weight} kg by {limit_data['target_date']}\n"
+            f"  Days remaining: {limit_data['days_remaining']}\n"
+            f"  Computed daily limit: {daily_goal} cal"
+        )
+    else:
+        weight_goal_section = (
+            f"\n*Weight:*\n"
+            f"  Current: {current_weight} kg\n"
+            f"  Target: {target_weight} kg\n"
+            f"  Daily goal: {daily_goal} cal"
+        )
+
+    profile_text = (
+        f"*Your Profile*\n\n"
+        f"*Name:* {name}\n"
+        f"*Username:* {username_str}\n"
+        f"*Language:* {language}\n"
+        f"*Timezone:* {timezone}\n"
+        f"*Dietary preferences:* {dietary}"
+        f"{weight_goal_section}\n\n"
+        f"_To update, just tell me naturally:_\n"
+        f'_"I\'m vegetarian", "set my timezone to UTC", etc._'
+    )
+
+    await send_telegram_message(chat_id, profile_text)
+
+
 async def handle_unsupported(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle unsupported message types."""
     chat_id = update.effective_chat.id
@@ -223,6 +314,7 @@ def main():
 
     # Register handlers
     app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("profile", profile_command))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(

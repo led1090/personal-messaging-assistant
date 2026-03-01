@@ -86,6 +86,18 @@ def init_db():
     if "last_weight_nudge_date" not in user_columns:
         cursor.execute("ALTER TABLE users ADD COLUMN last_weight_nudge_date DATE")
 
+    # Migration: add profile columns to users table
+    if "first_name" not in user_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN first_name TEXT")
+    if "last_name" not in user_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN last_name TEXT")
+    if "username" not in user_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN username TEXT")
+    if "language_code" not in user_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN language_code TEXT DEFAULT 'en'")
+    if "dietary_preferences" not in user_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN dietary_preferences TEXT DEFAULT ''")
+
     # Migration: add macro/rating columns to daily_summaries table
     cursor.execute("PRAGMA table_info(daily_summaries)")
     summary_columns = {row[1] for row in cursor.fetchall()}
