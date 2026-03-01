@@ -8,6 +8,13 @@ from database.repository import (
     get_user_today_macros,
     log_meal,
     get_user_meals_today,
+    log_weight,
+    set_weight_goal,
+    get_weight_history,
+    compute_daily_calorie_limit,
+    get_weekly_consumption,
+    get_monthly_consumption,
+    update_weight_nudge_date,
 )
 
 
@@ -30,6 +37,13 @@ def build_context_variables(phone_number: str, media_id: str = None) -> dict:
         "get_user_today_macros": get_user_today_macros,
         "log_meal": log_meal,
         "get_user_meals_today": get_user_meals_today,
+        "log_weight": log_weight,
+        "set_weight_goal": set_weight_goal,
+        "get_weight_history": get_weight_history,
+        "compute_daily_calorie_limit": compute_daily_calorie_limit,
+        "get_weekly_consumption": get_weekly_consumption,
+        "get_monthly_consumption": get_monthly_consumption,
+        "update_weight_nudge_date": update_weight_nudge_date,
         # Agent cross-references (for handoffs)
         "chat_agent": chat_agent,
         "food_analysis_agent": food_analysis_agent,

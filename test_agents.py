@@ -86,8 +86,66 @@ def test_food_photo_with_text(agent):
     return response.agent
 
 
+def test_text_meal_logging(agent):
+    print("\n=== Test 5: Text Meal Logging ===")
+    response = swarm_client.run(
+        agent=agent,
+        messages=[
+            {
+                "role": "user",
+                "content": "I just had 2 scrambled eggs and a slice of whole wheat toast with butter",
+            }
+        ],
+        context_variables=build_context_variables(phone_number=TEST_PHONE),
+    )
+    print(f"Agent: {response.agent.name}")
+    print(f"Reply: {response.messages[-1]['content']}")
+    return response.agent
+
+
+def test_weight_recording(agent):
+    print("\n=== Test 6: Weight Recording ===")
+    response = swarm_client.run(
+        agent=agent,
+        messages=[{"role": "user", "content": "My weight today is 82.5 kg"}],
+        context_variables=build_context_variables(phone_number=TEST_PHONE),
+    )
+    print(f"Agent: {response.agent.name}")
+    print(f"Reply: {response.messages[-1]['content']}")
+    return response.agent
+
+
+def test_weight_goal(agent):
+    print("\n=== Test 7: Set Weight Goal ===")
+    response = swarm_client.run(
+        agent=agent,
+        messages=[
+            {
+                "role": "user",
+                "content": "I want to reach 75 kg by 2026-06-01. My TDEE is about 2200.",
+            }
+        ],
+        context_variables=build_context_variables(phone_number=TEST_PHONE),
+    )
+    print(f"Agent: {response.agent.name}")
+    print(f"Reply: {response.messages[-1]['content']}")
+    return response.agent
+
+
+def test_monthly_report(agent):
+    print("\n=== Test 8: Monthly Report ===")
+    response = swarm_client.run(
+        agent=agent,
+        messages=[{"role": "user", "content": "Show me my monthly report"}],
+        context_variables=build_context_variables(phone_number=TEST_PHONE),
+    )
+    print(f"Agent: {response.agent.name}")
+    print(f"Reply: {response.messages[-1]['content']}")
+    return response.agent
+
+
 def test_daily_summary():
-    print("\n=== Test 5: Daily Summary ===")
+    print("\n=== Test 9: Daily Summary ===")
     response = swarm_client.run(
         agent=summary_agent,
         messages=[{"role": "user", "content": "Generate my daily calorie summary."}],
@@ -107,6 +165,10 @@ def main():
     agent = test_calorie_status(agent)
     agent = test_set_goal(agent)
     agent = test_food_photo_with_text(agent)
+    agent = test_text_meal_logging(agent)
+    agent = test_weight_recording(agent)
+    agent = test_weight_goal(agent)
+    agent = test_monthly_report(agent)
     test_daily_summary()
 
     print("\n=== All tests complete ===")

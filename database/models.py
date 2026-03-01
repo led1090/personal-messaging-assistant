@@ -49,6 +49,15 @@ def init_db():
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS weight_log (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER NOT NULL REFERENCES users(id),
+            weight_kg   REAL NOT NULL,
+            logged_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     # Migration: add macro columns to meals table if they don't exist
     cursor.execute("PRAGMA table_info(meals)")
     existing_columns = {row[1] for row in cursor.fetchall()}
@@ -59,6 +68,38 @@ def init_db():
         cursor.execute("ALTER TABLE meals ADD COLUMN carbs_g REAL DEFAULT 0")
     if "sugar_g" not in existing_columns:
         cursor.execute("ALTER TABLE meals ADD COLUMN sugar_g REAL DEFAULT 0")
+    if "health_rating" not in existing_columns:
+        cursor.execute("ALTER TABLE meals ADD COLUMN health_rating INTEGER DEFAULT 0")
+
+    # Migration: add weight/goal columns to users table
+    cursor.execute("PRAGMA table_info(users)")
+    user_columns = {row[1] for row in cursor.fetchall()}
+
+    if "current_weight" not in user_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN current_weight REAL")
+    if "target_weight" not in user_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN target_weight REAL")
+    if "target_date" not in user_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN target_date DATE")
+    if "tdee" not in user_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN tdee INTEGER DEFAULT 2000")
+    if "last_weight_nudge_date" not in user_columns:
+        cursor.execute("ALTER TABLE users ADD COLUMN last_weight_nudge_date DATE")
+
+    # Migration: add macro/rating columns to daily_summaries table
+    cursor.execute("PRAGMA table_info(daily_summaries)")
+    summary_columns = {row[1] for row in cursor.fetchall()}
+
+    if "total_protein" not in summary_columns:
+        cursor.execute("ALTER TABLE daily_summaries ADD COLUMN total_protein REAL DEFAULT 0")
+    if "total_carbs" not in summary_columns:
+        cursor.execute("ALTER TABLE daily_summaries ADD COLUMN total_carbs REAL DEFAULT 0")
+    if "total_sugar" not in summary_columns:
+        cursor.execute("ALTER TABLE daily_summaries ADD COLUMN total_sugar REAL DEFAULT 0")
+    if "avg_health_rating" not in summary_columns:
+        cursor.execute("ALTER TABLE daily_summaries ADD COLUMN avg_health_rating REAL DEFAULT 0")
+    if "daily_calorie_limit" not in summary_columns:
+        cursor.execute("ALTER TABLE daily_summaries ADD COLUMN daily_calorie_limit INTEGER DEFAULT 0")
 
     conn.commit()
     conn.close()

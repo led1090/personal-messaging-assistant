@@ -14,7 +14,7 @@ from telegram.ext import (
 )
 
 from config import TELEGRAM_BOT_TOKEN, SUMMARY_HOUR, SUMMARY_MINUTE
-from ai_agents import swarm_client, chat_agent
+from ai_agents import swarm_client, chat_agent, food_analysis_agent
 from context import build_context_variables
 from services.telegram import send_telegram_message, download_telegram_photo
 from services.scheduler import daily_summary_job
@@ -170,8 +170,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conv["messages"].append(user_message)
 
     try:
+        # Route directly to food_analysis_agent (skip chat_agent handoff)
         response = run_swarm_with_retry(
-            agent=conv["agent"],
+            agent=food_analysis_agent,
             messages=conv["messages"],
             context_variables=context_variables,
         )
